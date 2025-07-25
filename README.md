@@ -50,10 +50,10 @@ Executes corresponding recovery strategies based on error types:
 ```mermaid
 flowchart TD
     A[Start Monitoring] --> A1{Check Instance Exclusion List}
-    subgraph Anomaly Monitoring
-    A1 --> |Excluded (Processing)| B0[Continue Monitoring and Logging]
+    subgraph AnomalyMonitoring
+    A1 --> |Excluded under Processing| B0[Continue Monitoring and Logging]
     A1 --> |Not in Exclusion List| B[Collect Monitoring Metrics from DCGM Server]
-    B --> C{LLM Log Analysis (Custom Anomaly Classification)}
+    B --> C{LLM Log Analysis Custom Anomaly Classification}
     end
     
     C -->|HEALTHY| F[Continue Monitoring and Logging]
@@ -62,7 +62,7 @@ flowchart TD
     G -->|No| H[Report to CloudWatch + Continue Monitoring]
         
     G -->|Yes| L[Report to CloudWatch + Execute Handling Strategy]
-    subgraph Fault Handling
+    subgraph FaultHandling
     L --> O[Node Isolation]
     O --> P[Pod Eviction]
     
@@ -74,8 +74,8 @@ flowchart TD
     R --> A
     S --> A
 
-    style Anomaly Monitoring font-size:16px,font-weight:bold
-    style Fault Handling fill:#ffcccc,stroke:#ff0000,stroke-width:2px,color:#333,font-size:16px,font-weight:bold
+    style AnomalyMonitoring font-size:16px,font-weight:bold
+    style FaultHandling fill:#ffcccc,stroke:#ff0000,stroke-width:2px,color:#333,font-size:16px,font-weight:bold
 ```
 
 
