@@ -1,11 +1,27 @@
 import boto3
 import json
+import os
 
 bedrock = boto3.client("bedrock-runtime")
+sagemaker_runtime = boto3.client("sagemaker-runtime")
 
 def parse_gpu_metric_info(metric_data: str,
-                        model_id = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+                        llm_provider: str = None,
+                        model_id: str = None,
+                        endpoint_name: str = None
     ):
+    """
+    Parse GPU metric information using LLM
+    
+    Args:
+        metric_data: GPU metric data string
+        llm_provider: "bedrock" or "sagemaker" (default: from env LLM_PROVIDER or "bedrock")
+        model_id: Bedrock model ID (default: from env BEDROCK_MODEL_ID)
+        endpoint_name: SageMaker endpoint name (default: from env SAGEMAKER_ENDPOINT_NAME)
+    """
+    llm_provider = llm_provider or os.getenv("LLM_PROVIDER", "bedrock")
+    model_id = model_id or os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0")
+    endpoint_name = endpoint_name or os.getenv("SAGEMAKER_ENDPOINT_NAME")
 
     output_format = '''{"error_class": "above class code", "error_count": integer error count, "error_gpu_id": error gpu id}'''
 
@@ -59,24 +75,52 @@ HEALTHY
     }
 
 
-    resp_invoke = bedrock.invoke_model(
-        body=json.dumps(chat_payload), modelId=model_id
-    )
-
-    errclass = json.loads(resp_invoke['body'].read())
-    output_text = errclass['content'][0]['text']
-    output_data = output_text.replace("</error_class>","")
+    if llm_provider == "bedrock":
+        resp_invoke = bedrock.invoke_model(
+            body=json.dumps(chat_payload), modelId=model_id
+        )
+        errclass = json.loads(resp_invoke['body'].read())
+        output_text = errclass['content'][0]['text']
+    elif llm_provider == "sagemaker":
+        if not endpoint_name:
+            raise ValueError("SAGEMAKER_ENDPOINT_NAME must be set when using sagemaker provider")
+        
+        # SageMaker payload format
+        sagemaker_payload = {
+            "inputs": user_template.format(metric_data=metric_data, output_format=output_format),
+            "parameters": {
+                "max_new_tokens": 512,
+                "temperature": 0.1,
+                "return_full_text": False
+            }
+        }
+        
+        resp_invoke = sagemaker_runtime.invoke_endpoint(
+            EndpointName=endpoint_name,
+            ContentType="application/json",
+            Body=json.dumps(sagemaker_payload)
+        )
+        
+        result = json.loads(resp_invoke['Body'].read().decode())
+        output_text = result[0]['generated_text'] if isinstance(result, list) else result.get('generated_text', result)
+    else:
+        raise ValueError(f"Unsupported LLM provider: {llm_provider}")
+    
+    output_data = output_text.replace("</error_class>","").replace("<error_class>","").strip()
+    
+    # Extract JSON from markdown code blocks if present
+    if "```json" in output_data:
+        output_data = output_data.split("```json")[1].split("```")[0].strip()
+    elif "```" in output_data:
+        output_data = output_data.split("```")[1].split("```")[0].strip()
 
     try:
         output_dict = json.loads(output_data)
     except (ValueError, SyntaxError) as e:
         print(output_text)
         print(f"Parse LLM output error {e}")
+        return None
     
-    # print(errclass)
-    # print(output_text)
-    # print(output_dict)
-
     return output_dict
 
 
@@ -145,3 +189,8 @@ if __name__ == "__main__":
 
     errclassdict = parse_gpu_metric_info(data1)
     print(errclassdict)
+
+
+# Sample Usage
+# LLM_PROVIDER=sagemaker SAGEMAKER_ENDPOINT_NAME=hf-llm-mistral-small-24b-instruct-2501-2025-11-04-03-00-57-671 python3 dcgm-monitor-and-auto-recover.py
+# LLM_PROVIDER=bedrock BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0 python3 dcgm-monitor-and-auto-recover.py

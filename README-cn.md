@@ -97,7 +97,14 @@ export LOG_LEVEL=DEBUG              # 日志级别
 export WEBHOOK_URL=<webhook_url>    # Webhook通知URL
 export LAMBDA_FUNCTION=<func_name>  # Lambda函数名
 export SNS_TOPIC_ARN=<topic_arn>    # SNS主题ARN
+
+# LLM 配置（二选一）
+export LLM_PROVIDER=bedrock                    # LLM提供商: bedrock 或 sagemaker (默认: bedrock)
+export BEDROCK_MODEL_ID=<model_id>             # Bedrock模型ID (可选)
+export SAGEMAKER_ENDPOINT_NAME=<endpoint_name> # SageMaker Endpoint名称 (使用sagemaker时必填)
 ```
+
+详细的 LLM 配置说明请参考 [LLM_CONFIG.md](LLM_CONFIG.md)
 
 ## 文件结构
 
